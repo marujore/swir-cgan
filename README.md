@@ -28,6 +28,13 @@ cd swir-cgan
 pip install -e .
 ```
 
+or, with conda, from a local clone (this installs rasterio from conda-forge):
+
+```bash
+conda env create -f environment.yml
+conda activate swir-cgan
+```
+
 Requirements: Python ≥ 3.10, PyTorch ≥ 2.4, rasterio, NumPy, SciPy and tqdm.
 A CUDA-capable GPU is recommended but not required.
 To get a specific CUDA build of PyTorch, install it first by following the
