@@ -1,4 +1,4 @@
-"""WFI-SWIR-cGAN: synthesis of SWIR bands for the Wide Field Imager (WFI) sensor."""
+"""SWIR-cGAN: synthesis of SWIR bands for the Wide Field Imager (WFI) sensor."""
 
 from .inference import (
     SWIRGenerator,

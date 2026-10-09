@@ -1,8 +1,8 @@
-# wfi-swir-cgan
+# swir-cgan
 
 A Short-Wave Infrared (SWIR) synthesis framework for the Wide Field Imager (WFI) sensor.
 
-`wfi-swir-cgan` generates synthetic SWIR bands for images from the WFI cameras on board
+`swir-cgan` generates synthetic SWIR bands for images from the WFI cameras on board
 **CBERS-4, CBERS-4A and AMAZONIA-1**. These cameras have no SWIR bands. From the four WFI bands
 (**blue, green, red and near-infrared (NIR)**), the package generates the two Sentinel-2-like
 SWIR bands: **B11 (SWIR1, ~1610 nm)** and **B12 (SWIR2, ~2190 nm)**.
@@ -13,7 +13,7 @@ It uses a conditional GAN with an attention U-Net generator.
 ## Installation
 
 ```bash
-pip install git+https://github.com/marujore/wfi-swir-cgan.git
+pip install git+https://github.com/marujore/swir-cgan.git
 ```
 
 If you have Git LFS installed, prefix the command with `GIT_LFS_SKIP_SMUDGE=1` to avoid
@@ -23,8 +23,8 @@ and are downloaded on first use.
 or from a local clone:
 
 ```bash
-git clone https://github.com/marujore/wfi-swir-cgan.git
-cd wfi-swir-cgan
+git clone https://github.com/marujore/swir-cgan.git
+cd swir-cgan
 pip install -e .
 ```
 
@@ -49,19 +49,19 @@ Check the result with
 
 There is one generator per band: `best_model_B11.pth` and `best_model_B12.pth`, about 200 MB each.
 They are published as assets of the
-[`weights-v1` release](https://github.com/marujore/wfi-swir-cgan/releases/tag/weights-v1).
+[`weights-v1` release](https://github.com/marujore/swir-cgan/releases/tag/weights-v1).
 They are too large to ship inside the Python package, so the package **downloads them
-automatically the first time they are needed** and caches them in `~/.cache/wfi_swir_cgan/`.
+automatically the first time they are needed** and caches them in `~/.cache/swir_cgan/`.
 Only the band you use is downloaded. The repository also keeps a copy in
-`wfi_swir_cgan/weights/` with [Git LFS](https://git-lfs.com/).
+`swir_cgan/weights/` with [Git LFS](https://git-lfs.com/).
 
 The package looks for the weights in this order:
 
 1. The `weights_path=` argument (Python) or `--weights-dir` (CLI).
-2. The directory in the `WFI_SWIR_CGAN_WEIGHTS_DIR` environment variable.
-3. `wfi_swir_cgan/weights/` inside the package. This is used when you work from a clone
+2. The directory in the `SWIR_CGAN_WEIGHTS_DIR` environment variable.
+3. `swir_cgan/weights/` inside the package. This is used when you work from a clone
    (`pip install -e .`).
-4. The cache directory (`$XDG_CACHE_HOME/wfi_swir_cgan` or `~/.cache/wfi_swir_cgan`).
+4. The cache directory (`$XDG_CACHE_HOME/swir_cgan` or `~/.cache/swir_cgan`).
    If the file is missing there, it is downloaded from the `weights-v1` release.
 
 If you clone the repository, install Git LFS first (`git lfs install`) so that the real `.pth`
@@ -69,14 +69,14 @@ files are fetched. Without it, the clone contains small pointer files instead. T
 them and falls back to downloading the weights.
 
 For offline machines, copy the two `.pth` files to a folder and set
-`export WFI_SWIR_CGAN_WEIGHTS_DIR=/path/to/folder`.
+`export SWIR_CGAN_WEIGHTS_DIR=/path/to/folder`.
 
 ## Quick start
 
 ### 4-band stack
 
 ```python
-from wfi_swir_cgan import generate_swir1, generate_swir2
+from swir_cgan import generate_swir1, generate_swir2
 
 generate_swir1('wfi_stack.tif', 'wfi_B11.tif')
 generate_swir2('wfi_stack.tif', 'wfi_B12.tif', batch_size=16)
@@ -115,7 +115,7 @@ The four files must share the same size, geotransform and CRS. If they don't, a 
 create a `SWIRGenerator` once and reuse it:
 
 ```python
-from wfi_swir_cgan import SWIRGenerator
+from swir_cgan import SWIRGenerator
 
 generator = SWIRGenerator('B11', device='cuda', batch_size=32)
 for scene in ['scene_a.tif', 'scene_b.tif']:
@@ -131,13 +131,13 @@ More examples are in [`examples/example.py`](examples/example.py).
 
 ```bash
 # From a stack, generating both bands
-wfi-swir-cgan --stack wfi_stack.tif --b11 out_B11.tif --b12 out_B12.tif
+swir-cgan --stack wfi_stack.tif --b11 out_B11.tif --b12 out_B12.tif
 
 # From separate files (order: blue green red nir)
-wfi-swir-cgan --bands blue.tif green.tif red.tif nir.tif --b11 out_B11.tif --device cpu
+swir-cgan --bands blue.tif green.tif red.tif nir.tif --b11 out_B11.tif --device cpu
 ```
 
-Run `wfi-swir-cgan --help` for all options.
+Run `swir-cgan --help` for all options.
 
 ## Parameters
 
@@ -169,7 +169,7 @@ Run `wfi-swir-cgan --help` for all options.
 1. The four WFI bands are normalized to `[0, 1]` and reflection-padded on every side, so pixels at
    the image edges are also predicted near the center of a tile.
 2. The image is split into overlapping 128×128 tiles (stride 64) and processed in batches by the
-   attention U-Net generator (`wfi_swir_cgan.network.UNetGenerator`).
+   attention U-Net generator (`swir_cgan.network.UNetGenerator`).
 3. Tile predictions are combined with a 2D Tukey window. This removes seams between tiles without
    changing brightness in the tile centers.
 4. The padding is cropped, the original scale is restored and the nodata mask is reapplied.
@@ -186,13 +186,13 @@ Metrics stored in each checkpoint for the best training epoch (reflectance in `[
 ## Project layout
 
 ```
-wfi_swir_cgan/
+swir_cgan/
 ├── __init__.py      # public API
 ├── inference.py     # SWIRGenerator, generate_swir1/2, tiled inference
 ├── io.py            # reading stacks or separate band files, writing GeoTIFFs
 ├── network.py       # UNetGenerator and PatchDiscriminator
 ├── weights.py       # locating / downloading / loading checkpoints
-├── cli.py           # `wfi-swir-cgan` command
+├── cli.py           # `swir-cgan` command
 └── weights/         # .pth checkpoints (Git LFS, not included in the wheel)
 examples/            # usage examples
 scripts/             # maintenance scripts (weights export)

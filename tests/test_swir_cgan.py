@@ -4,8 +4,8 @@ import rasterio
 import torch
 from rasterio.transform import from_origin
 
-from wfi_swir_cgan.inference import predict_array
-from wfi_swir_cgan.io import BAND_ORDER, read_wfi, write_band
+from swir_cgan.inference import predict_array
+from swir_cgan.io import BAND_ORDER, read_wfi, write_band
 
 H, W = 50, 70
 TRANSFORM = from_origin(500000, 8000000, 64, 64)

@@ -12,7 +12,7 @@ import argparse
 
 import torch
 
-from wfi_swir_cgan.weights import _SAFE_GLOBALS
+from swir_cgan.weights import _SAFE_GLOBALS
 
 
 def main():

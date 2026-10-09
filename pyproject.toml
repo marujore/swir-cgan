@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "wfi-swir-cgan"
+name = "swir-cgan"
 dynamic = ["version"]
 description = "Synthetic SWIR bands for CBERS-4, CBERS-4A and AMAZONIA-1 WFI imagery."
 readme = "README.md"
@@ -29,19 +29,19 @@ dependencies = [
 test = ["pytest"]
 
 [project.scripts]
-wfi-swir-cgan = "wfi_swir_cgan.cli:main"
+swir-cgan = "swir_cgan.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/marujore/wfi-swir-cgan"
-Issues = "https://github.com/marujore/wfi-swir-cgan/issues"
+Homepage = "https://github.com/marujore/swir-cgan"
+Issues = "https://github.com/marujore/swir-cgan/issues"
 
 [tool.setuptools]
-packages = ["wfi_swir_cgan"]
+packages = ["swir_cgan"]
 
 [tool.setuptools.dynamic]
-version = {attr = "wfi_swir_cgan.__version__"}
+version = {attr = "swir_cgan.__version__"}
 
 # The .pth checkpoints (Git LFS) are NOT shipped in the wheel (PyPI limits files
-# to 100 MB); they are downloaded on first use. See wfi_swir_cgan/weights.py.
+# to 100 MB); they are downloaded on first use. See swir_cgan/weights.py.
 [tool.setuptools.exclude-package-data]
-wfi_swir_cgan = ["weights/*.pth"]
+swir_cgan = ["weights/*.pth"]

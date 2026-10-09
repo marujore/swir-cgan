@@ -3,11 +3,11 @@
 Weights are looked up in the following order:
 
 1. An explicit path passed by the user (``weights_path=...``).
-2. The directory given by the ``WFI_SWIR_CGAN_WEIGHTS_DIR`` environment variable.
+2. The directory given by the ``SWIR_CGAN_WEIGHTS_DIR`` environment variable.
 3. The ``weights/`` directory inside the installed package (useful for a
    cloned repository or an editable install).
-4. The user cache directory (``~/.cache/wfi_swir_cgan`` by default, or
-   ``$XDG_CACHE_HOME/wfi_swir_cgan``). If the file is missing it is
+4. The user cache directory (``~/.cache/swir_cgan`` by default, or
+   ``$XDG_CACHE_HOME/swir_cgan``). If the file is missing it is
    downloaded from the GitHub release defined by ``WEIGHTS_BASE_URL``.
 
 Files that are Git LFS pointers (a clone made without ``git-lfs`` installed)
@@ -36,13 +36,13 @@ WEIGHT_FILES = {
 # keep the names listed in ``WEIGHT_FILES``. New weights go into a new release
 # (``weights-v2``...), so older package versions keep downloading their own weights.
 WEIGHTS_BASE_URL = os.environ.get(
-    'WFI_SWIR_CGAN_WEIGHTS_URL',
-    'https://github.com/marujore/wfi-swir-cgan/releases/download/weights-v1',
+    'SWIR_CGAN_WEIGHTS_URL',
+    'https://github.com/marujore/swir-cgan/releases/download/weights-v1',
 )
 
 _LFS_POINTER_PREFIX = b'version https://git-lfs.github.com/spec/'
 
-ENV_WEIGHTS_DIR = 'WFI_SWIR_CGAN_WEIGHTS_DIR'
+ENV_WEIGHTS_DIR = 'SWIR_CGAN_WEIGHTS_DIR'
 PACKAGE_WEIGHTS_DIR = Path(__file__).parent / 'weights'
 
 # Non-tensor globals present in the training checkpoints (metric values saved
@@ -75,7 +75,7 @@ def _is_lfs_pointer(path):
 def get_cache_dir():
     """Return the directory where downloaded weights are cached."""
     base = os.environ.get('XDG_CACHE_HOME') or Path.home() / '.cache'
-    return Path(base) / 'wfi_swir_cgan'
+    return Path(base) / 'swir_cgan'
 
 
 def get_weights_path(band, download=True):

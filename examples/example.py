@@ -1,6 +1,6 @@
-"""Usage examples for wfi-swir-cgan."""
+"""Usage examples for swir-cgan."""
 
-from wfi_swir_cgan import SWIRGenerator, generate_swir1, generate_swir2
+from swir_cgan import SWIRGenerator, generate_swir1, generate_swir2
 
 # 1) Single 4-band stack (band order: blue, green, red, nir)
 generate_swir1(input_raster='input/wfi_stack.tif', output_raster='output/wfi_B11.tif', batch_size=16)

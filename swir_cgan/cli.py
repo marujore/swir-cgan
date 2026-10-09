@@ -1,4 +1,4 @@
-"""Command line interface: ``wfi-swir-cgan``."""
+"""Command line interface: ``swir-cgan``."""
 
 import argparse
 
@@ -8,7 +8,7 @@ from .io import BAND_ORDER
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        prog='wfi-swir-cgan',
+        prog='swir-cgan',
         description='Generate SWIR bands (B11/B12) from WFI blue, green, red and NIR bands.',
     )
     src = parser.add_mutually_exclusive_group(required=True)
