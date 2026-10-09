@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "wfi-swir-cgan"
 dynamic = ["version"]
-description = "A Short-Wave Infrared (SWIR) synthesis framework for the Wide Field Imager (WFI) sensor."
+description = "Synthetic SWIR bands for CBERS-4, CBERS-4A and AMAZONIA-1 WFI imagery."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
-keywords = ["remote sensing", "WFI", "CBERS", "Amazonia-1", "SWIR", "GAN", "deep learning"]
+keywords = ["remote sensing", "WFI", "CBERS-4", "CBERS-4A", "AMAZONIA-1", "SWIR", "GAN", "deep learning"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Intended Audience :: Science/Research",

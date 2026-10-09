@@ -2,9 +2,13 @@
 
 A Short-Wave Infrared (SWIR) synthesis framework for the Wide Field Imager (WFI) sensor.
 
-`wfi-swir-cgan` generates the two Sentinel-2-like SWIR bands, **B11 (SWIR1, ~1610 nm)** and
-**B12 (SWIR2, ~2190 nm)**, from the four WFI bands: **blue, green, red and near-infrared (NIR)**.
+`wfi-swir-cgan` generates synthetic SWIR bands for images from the WFI cameras on board
+**CBERS-4, CBERS-4A and AMAZONIA-1**. These cameras have no SWIR bands. From the four WFI bands
+(**blue, green, red and near-infrared (NIR)**), the package generates the two Sentinel-2-like
+SWIR bands: **B11 (SWIR1, ~1610 nm)** and **B12 (SWIR2, ~2190 nm)**.
 It uses a conditional GAN with an attention U-Net generator.
+
+> **Input images must be Top of Atmosphere (ToA) reflectance.**
 
 ## Installation
 
@@ -16,12 +20,12 @@ If you have Git LFS installed, prefix the command with `GIT_LFS_SKIP_SMUDGE=1` t
 downloading the weights during installation. They are not included in the package anyway,
 and are downloaded on first use.
 
-or, for development, from a clone:
+or from a local clone:
 
 ```bash
 git clone https://github.com/marujore/wfi-swir-cgan.git
 cd wfi-swir-cgan
-pip install -e ".[test]"
+pip install -e .
 ```
 
 Requirements: Python ≥ 3.10, PyTorch ≥ 2.4, rasterio, NumPy, SciPy and tqdm.
@@ -136,6 +140,8 @@ Run `wfi-swir-cgan --help` for all options.
 
 ## Input and output conventions
 
+- **Processing level.** The WFI bands (CBERS-4, CBERS-4A or AMAZONIA-1) must be
+  **Top of Atmosphere (ToA) reflectance**.
 - **Reflectance scale.** Inputs can be in `[0, 1]` or scaled by 10,000 (`[0, 10000]`). Scaling is
   detected automatically: if any value is above 1, the image is divided by 10,000. The output uses
   the same scale as the input.
@@ -156,9 +162,9 @@ Run `wfi-swir-cgan --help` for all options.
    changing brightness in the tile centers.
 4. The padding is cropped, the original scale is restored and the nodata mask is reapplied.
 
-### Validation metrics
+### Metrics
 
-Best validation metrics stored in each checkpoint (reflectance in `[0, 1]`):
+Metrics stored in each checkpoint for the best training epoch (reflectance in `[0, 1]`):
 
 | Band | SSIM | PSNR (dB) | R² | MAE | RMSE |
 |---|---|---|---|---|---|
@@ -180,31 +186,6 @@ examples/            # usage examples
 scripts/             # maintenance scripts (weights export)
 tests/               # pytest suite
 ```
-
-## Development
-
-```bash
-pip install -e ".[test]"
-pytest
-```
-
-### Updating the weights (maintainers)
-
-Installed packages download the weights from a GitHub release. To publish new weights:
-
-1. Optionally strip the training checkpoints down to inference-only files. This removes the
-   discriminator and saves about 11 MB per file:
-   ```bash
-   python scripts/export_weights.py checkpoints/best_model_B11.pth wfi_swir_cgan/weights/best_model_B11.pth
-   python scripts/export_weights.py checkpoints/best_model_B12.pth wfi_swir_cgan/weights/best_model_B12.pth
-   ```
-2. Create a new release (for example `weights-v2`) and attach both files. Keep the names
-   `best_model_B11.pth` and `best_model_B12.pth`.
-3. Update `WEIGHTS_BASE_URL` in `wfi_swir_cgan/weights.py` to the new release.
-4. Commit the files (tracked with Git LFS, see `.gitattributes`) and the code change.
-
-Don't replace the assets of an existing release. Older package versions keep downloading
-from the release they point to.
 
 ## Citation
 
