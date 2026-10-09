@@ -16,10 +16,6 @@ It uses a conditional GAN with an attention U-Net generator.
 pip install git+https://github.com/marujore/swir-cgan.git
 ```
 
-If you have Git LFS installed, prefix the command with `GIT_LFS_SKIP_SMUDGE=1` to avoid
-downloading the weights during installation. They are not included in the package anyway,
-and are downloaded on first use.
-
 or from a local clone:
 
 ```bash
@@ -59,21 +55,16 @@ They are published as assets of the
 [`weights-v1` release](https://github.com/marujore/swir-cgan/releases/tag/weights-v1).
 They are too large to ship inside the Python package, so the package **downloads them
 automatically the first time they are needed** and caches them in `~/.cache/swir_cgan/`.
-Only the band you use is downloaded. The repository also keeps a copy in
-`swir_cgan/weights/` with [Git LFS](https://git-lfs.com/).
+Only the band you use is downloaded.
 
 The package looks for the weights in this order:
 
 1. The `weights_path=` argument (Python) or `--weights-dir` (CLI).
 2. The directory in the `SWIR_CGAN_WEIGHTS_DIR` environment variable.
-3. `swir_cgan/weights/` inside the package. This is used when you work from a clone
-   (`pip install -e .`).
+3. `swir_cgan/weights/` inside the package, if you place the files there (for example
+   in a clone installed with `pip install -e .`). The `.pth` files there are ignored by Git.
 4. The cache directory (`$XDG_CACHE_HOME/swir_cgan` or `~/.cache/swir_cgan`).
    If the file is missing there, it is downloaded from the `weights-v1` release.
-
-If you clone the repository, install Git LFS first (`git lfs install`) so that the real `.pth`
-files are fetched. Without it, the clone contains small pointer files instead. The package detects
-them and falls back to downloading the weights.
 
 For offline machines, copy the two `.pth` files to a folder and set
 `export SWIR_CGAN_WEIGHTS_DIR=/path/to/folder`.
@@ -200,7 +191,7 @@ swir_cgan/
 ├── network.py       # UNetGenerator and PatchDiscriminator
 ├── weights.py       # locating / downloading / loading checkpoints
 ├── cli.py           # `swir-cgan` command
-└── weights/         # .pth checkpoints (Git LFS, not included in the wheel)
+└── weights/         # optional local copy of the checkpoints (not tracked)
 examples/            # usage examples
 scripts/             # maintenance scripts (weights export)
 tests/               # pytest suite
