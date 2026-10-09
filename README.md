@@ -33,6 +33,18 @@ A CUDA-capable GPU is recommended but not required.
 To get a specific CUDA build of PyTorch, install it first by following the
 [PyTorch instructions](https://pytorch.org/get-started/locally/).
 
+**Older GPUs.** The default PyTorch wheels on PyPI are built for recent GPUs only. Recent
+versions use CUDA 13, which requires compute capability ≥ 7.5. On older GPUs, such as Pascal or
+Volta, the package warns and runs on the CPU. To use these GPUs, install PyTorch built for
+CUDA 12.6:
+
+```bash
+pip install --force-reinstall torch --index-url https://download.pytorch.org/whl/cu126
+```
+
+Check the result with
+`python -c "import torch; print(torch.cuda.get_arch_list(), torch.cuda.get_device_capability())"`.
+
 ## Pretrained weights
 
 There is one generator per band: `best_model_B11.pth` and `best_model_B12.pth`, about 200 MB each.

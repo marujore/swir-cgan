@@ -1,5 +1,8 @@
 """Tiled inference of SWIR bands (Sentinel-2-like B11/B12) from WFI imagery."""
 
+import re
+import warnings
+
 import numpy as np
 import torch
 from scipy.signal.windows import tukey
@@ -25,11 +28,50 @@ def get_blend_window(patch_size, alpha=0.5):
     return np.clip(w2d, 1e-4, 1.0).astype(np.float32)
 
 
+def cuda_device_supported(index=0):
+    """Return True if the installed PyTorch has kernels for CUDA device ``index``.
+
+    PyTorch wheels are compiled for a limited set of GPU architectures (e.g. the
+    CUDA 13 builds require compute capability >= 7.5). Running on an older GPU fails
+    with ``CUDA error: no kernel image is available for execution on the device``.
+    """
+    major, minor = torch.cuda.get_device_capability(index)
+    for arch in torch.cuda.get_arch_list():
+        match = re.fullmatch(r'(sm|compute)_(\d+)(\d)[a-z]?', arch)
+        if not match:
+            continue
+        kind, arch_major, arch_minor = match.group(1), int(match.group(2)), int(match.group(3))
+        # Binary code (sm) runs on the same major version with an equal or higher minor;
+        # PTX (compute) can be JIT-compiled for any equal or newer architecture.
+        if kind == 'sm' and arch_major == major and arch_minor <= minor:
+            return True
+        if kind == 'compute' and (arch_major, arch_minor) <= (major, minor):
+            return True
+    return False
+
+
 def get_device(device=None):
-    """Return a ``torch.device``; defaults to CUDA when available."""
-    if device is None:
-        return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    return torch.device(device)
+    """Return a ``torch.device``.
+
+    By default uses CUDA when it is available and supported by the installed
+    PyTorch build, and falls back to the CPU otherwise.
+    """
+    if device is not None:
+        return torch.device(device)
+    if not torch.cuda.is_available():
+        return torch.device('cpu')
+    if not cuda_device_supported(0):
+        major, minor = torch.cuda.get_device_capability(0)
+        warnings.warn(
+            f"GPU {torch.cuda.get_device_name(0)} (compute capability {major}.{minor}) is not "
+            f"supported by the installed PyTorch {torch.__version__} (built for "
+            f"{' '.join(torch.cuda.get_arch_list())}). Falling back to the CPU, which is much "
+            "slower. To use the GPU, install a PyTorch build for an older CUDA version, e.g. "
+            "`pip install torch --index-url https://download.pytorch.org/whl/cu126`.",
+            stacklevel=2,
+        )
+        return torch.device('cpu')
+    return torch.device('cuda')
 
 
 def load_inference_model(band, weights_path=None, device=None, pad_input=16):
