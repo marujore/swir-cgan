@@ -12,6 +12,10 @@ It uses a conditional GAN with an attention U-Net generator.
 pip install git+https://github.com/marujore/wfi-swir-cgan.git
 ```
 
+If you have Git LFS installed, prefix the command with `GIT_LFS_SKIP_SMUDGE=1` to avoid
+downloading the weights during installation. They are not included in the package anyway,
+and are downloaded on first use.
+
 or, for development, from a clone:
 
 ```bash
@@ -28,10 +32,12 @@ To get a specific CUDA build of PyTorch, install it first by following the
 ## Pretrained weights
 
 There is one generator per band: `best_model_B11.pth` and `best_model_B12.pth`, about 200 MB each.
-They are stored in this repository with [Git LFS](https://git-lfs.com/), in `wfi_swir_cgan/weights/`.
-They are too large to ship inside the Python package, so a `pip` install **downloads them
+They are published as assets of the
+[`weights-v1` release](https://github.com/marujore/wfi-swir-cgan/releases/tag/weights-v1).
+They are too large to ship inside the Python package, so the package **downloads them
 automatically the first time they are needed** and caches them in `~/.cache/wfi_swir_cgan/`.
-Only the band you use is downloaded.
+Only the band you use is downloaded. The repository also keeps a copy in
+`wfi_swir_cgan/weights/` with [Git LFS](https://git-lfs.com/).
 
 The package looks for the weights in this order:
 
@@ -40,7 +46,7 @@ The package looks for the weights in this order:
 3. `wfi_swir_cgan/weights/` inside the package. This is used when you work from a clone
    (`pip install -e .`).
 4. The cache directory (`$XDG_CACHE_HOME/wfi_swir_cgan` or `~/.cache/wfi_swir_cgan`).
-   If the file is missing there, it is downloaded from the repository's Git LFS storage.
+   If the file is missing there, it is downloaded from the `weights-v1` release.
 
 If you clone the repository, install Git LFS first (`git lfs install`) so that the real `.pth`
 files are fetched. Without it, the clone contains small pointer files instead. The package detects
@@ -184,7 +190,7 @@ pytest
 
 ### Updating the weights (maintainers)
 
-The `.pth` files are tracked with Git LFS (see `.gitattributes`). To replace them:
+Installed packages download the weights from a GitHub release. To publish new weights:
 
 1. Optionally strip the training checkpoints down to inference-only files. This removes the
    discriminator and saves about 11 MB per file:
@@ -192,10 +198,13 @@ The `.pth` files are tracked with Git LFS (see `.gitattributes`). To replace the
    python scripts/export_weights.py checkpoints/best_model_B11.pth wfi_swir_cgan/weights/best_model_B11.pth
    python scripts/export_weights.py checkpoints/best_model_B12.pth wfi_swir_cgan/weights/best_model_B12.pth
    ```
-2. Commit and push them. Keep the names `best_model_B11.pth` and `best_model_B12.pth`.
+2. Create a new release (for example `weights-v2`) and attach both files. Keep the names
+   `best_model_B11.pth` and `best_model_B12.pth`.
+3. Update `WEIGHTS_BASE_URL` in `wfi_swir_cgan/weights.py` to the new release.
+4. Commit the files (tracked with Git LFS, see `.gitattributes`) and the code change.
 
-Installed packages download from the `main` branch (`WEIGHTS_REF` in
-`wfi_swir_cgan/weights.py`). To pin a version, set `WEIGHTS_REF` to a tag.
+Don't replace the assets of an existing release. Older package versions keep downloading
+from the release they point to.
 
 ## Citation
 

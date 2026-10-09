@@ -8,8 +8,7 @@ Weights are looked up in the following order:
    cloned repository or an editable install).
 4. The user cache directory (``~/.cache/wfi_swir_cgan`` by default, or
    ``$XDG_CACHE_HOME/wfi_swir_cgan``). If the file is missing it is
-   downloaded from the Git LFS storage of the GitHub repository
-   (``WEIGHTS_BASE_URL``).
+   downloaded from the GitHub release defined by ``WEIGHTS_BASE_URL``.
 
 Files that are Git LFS pointers (a clone made without ``git-lfs`` installed)
 are ignored.
@@ -32,14 +31,13 @@ WEIGHT_FILES = {
     'B12': 'best_model_B12.pth',
 }
 
-# Git ref (branch or tag) of the repository from which the weights are downloaded.
-WEIGHTS_REF = 'main'
-
-# The ``.pth`` files (~200 MB each) are stored with Git LFS and are not shipped in
-# the wheel (PyPI limits files to 100 MB). They are served raw by GitHub at this URL.
+# The ``.pth`` files (~200 MB each) are not shipped in the wheel (PyPI limits files
+# to 100 MB). They are downloaded from the assets of this GitHub release, which must
+# keep the names listed in ``WEIGHT_FILES``. New weights go into a new release
+# (``weights-v2``...), so older package versions keep downloading their own weights.
 WEIGHTS_BASE_URL = os.environ.get(
     'WFI_SWIR_CGAN_WEIGHTS_URL',
-    f'https://media.githubusercontent.com/media/marujore/wfi-swir-cgan/{WEIGHTS_REF}/wfi_swir_cgan/weights',
+    'https://github.com/marujore/wfi-swir-cgan/releases/download/weights-v1',
 )
 
 _LFS_POINTER_PREFIX = b'version https://git-lfs.github.com/spec/'
