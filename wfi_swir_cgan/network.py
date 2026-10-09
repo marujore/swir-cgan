@@ -1,3 +1,10 @@
+"""Neural network architectures of the WFI-to-SWIR conditional GAN.
+
+The :class:`UNetGenerator` is used for inference. The
+:class:`PatchDiscriminator` is only needed for training and is kept here for
+completeness.
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -68,6 +75,8 @@ class UpBlockWithAtt(nn.Module):
         return x
 
 class UNetGenerator(nn.Module):
+    """Attention U-Net that maps 4 WFI bands (B, G, R, NIR) to one SWIR band."""
+
     def __init__(self, dropout_rate=0.3, pad_input=16):
         super().__init__()
         self.pad_input = pad_input
@@ -108,6 +117,8 @@ class UNetGenerator(nn.Module):
                                     self.pad_input:self.pad_input + w])
 
 class PatchDiscriminator(nn.Module):
+    """PatchGAN discriminator conditioned on the WFI input (training only)."""
+
     def __init__(self, in_channels=5):
         super().__init__()
         def block(i, o, s=2, norm=True):

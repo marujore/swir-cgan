@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wfi-swir-cgan"
+dynamic = ["version"]
+description = "A Short-Wave Infrared (SWIR) synthesis framework for the Wide Field Imager (WFI) sensor."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+keywords = ["remote sensing", "WFI", "CBERS", "Amazonia-1", "SWIR", "GAN", "deep learning"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+dependencies = [
+    "numpy",
+    "rasterio",
+    "scipy",
+    "torch>=2.4",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+wfi-swir-cgan = "wfi_swir_cgan.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/marujore/wfi-swir-cgan"
+Issues = "https://github.com/marujore/wfi-swir-cgan/issues"
+
+[tool.setuptools]
+packages = ["wfi_swir_cgan"]
+
+[tool.setuptools.dynamic]
+version = {attr = "wfi_swir_cgan.__version__"}
+
+# The .pth checkpoints (Git LFS) are NOT shipped in the wheel (PyPI limits files
+# to 100 MB); they are downloaded on first use. See wfi_swir_cgan/weights.py.
+[tool.setuptools.exclude-package-data]
+wfi_swir_cgan = ["weights/*.pth"]

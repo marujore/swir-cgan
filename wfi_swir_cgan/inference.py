@@ -1,27 +1,19 @@
-import os
+"""Tiled inference of SWIR bands (Sentinel-2-like B11/B12) from WFI imagery."""
 
-import torch
 import numpy as np
-import rasterio
-from tqdm import tqdm
+import torch
 from scipy.signal.windows import tukey
+from tqdm import tqdm
 
-from models import UNetGenerator
+from .io import read_wfi, write_band
+from .network import UNetGenerator
+from .weights import get_weights_path, load_generator_state_dict, normalize_band
 
+# Dropout rates used during training (irrelevant in eval mode, kept for fidelity).
+DROPOUT = {'B11': 0.065, 'B12': 0.129}
 
-def get_hyperparameters(band):
-    if band == 5:  # B11
-        return {
-            'LR_G': 0.000487, 'LR_D': 0.000011, 'DROPOUT': 0.065, 
-            'L1': 13.627, 'SSIM': 42.781, 'GAN': 0.019, 
-            'GRAD': 133.933, 'PERC': 1.213
-        }
-    elif band == 6:  # B12
-        return {
-            'LR_G': 0.000499, 'LR_D': 0.000010, 'DROPOUT': 0.129, 
-            'L1': 19.556, 'SSIM': 34.991594, 'GAN': 0.025, 
-            'GRAD': 180.192, 'PERC': 6.532
-        }
+REFLECTANCE_SCALE = 10000.0
+
 
 def get_blend_window(patch_size, alpha=0.5):
     """
@@ -33,195 +25,187 @@ def get_blend_window(patch_size, alpha=0.5):
     return np.clip(w2d, 1e-4, 1.0).astype(np.float32)
 
 
-def load_inference_model(target_band, checkpoint_path, device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'), pad_input=16):
-    """Loads the generator weights directly from the production checkpoint."""
+def get_device(device=None):
+    """Return a ``torch.device``; defaults to CUDA when available."""
+    if device is None:
+        return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    return torch.device(device)
+
+
+def load_inference_model(band, weights_path=None, device=None, pad_input=16):
+    """Build the generator for ``band`` ('B11' or 'B12') and load its weights."""
+    band = normalize_band(band)
+    device = get_device(device)
+    checkpoint_path = weights_path or get_weights_path(band)
     print(f"[*] Loading model weights from: {checkpoint_path}")
-    
-    hp = get_hyperparameters(target_band)
-    dropout_rate = hp['DROPOUT']
-    
-    model = UNetGenerator(dropout_rate=dropout_rate, pad_input=pad_input).to(device)
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    
-    if isinstance(checkpoint, dict) and 'G_state_dict' in checkpoint:
-        state_dict = checkpoint['G_state_dict']
-    elif isinstance(checkpoint, dict) and 'generator_state_dict' in checkpoint:
-        state_dict = checkpoint['generator_state_dict']
-    else:
-        state_dict = checkpoint
-        
-    first_key = next(iter(state_dict))
-    if first_key.startswith('module.'):
-        state_dict = {k.replace('module.', '', 1): v for k, v in state_dict.items()}
-        
-    model.load_state_dict(state_dict)
+
+    model = UNetGenerator(dropout_rate=DROPOUT[band], pad_input=pad_input).to(device)
+    model.load_state_dict(load_generator_state_dict(checkpoint_path))
     model.eval()
-    print(f"[+] Generator (Band {target_band}, Dropout={dropout_rate}) loaded successfully.")
+    print(f"[+] Generator ({band}) loaded successfully on {device}.")
     return model
 
 
-def predict_raster(model, input_raster_path, output_raster_path, device, 
-                   patch_size=128, overlap=64, batch_size=32):
-    print(f"[*] Processing input raster: {input_raster_path}")
-    
-    with rasterio.open(input_raster_path) as src:
-        meta = src.meta.copy()
-        image = src.read().astype(np.float32)  # Shape: (C, H, W)
-        
-        # 1. IDENTIFY EXACT EDGE MASK (No block cropping)
-        nodata_val = src.nodata if src.nodata is not None else -9999.0
-        
-        # A pixel is invalid if ALL bands are nodata, or if it contains NaN
-        invalid_mask = np.all(image == nodata_val, axis=0) | np.any(np.isnan(image), axis=0)
+def predict_array(model, image, device, patch_size=128, overlap=64, batch_size=32):
+    """Run tiled inference on a ``(4, H, W)`` reflectance array in ``[0, 1]``.
+
+    Returns a ``(H, W)`` float32 array in ``[0, 1]``.
+    """
+    channels, height, width = image.shape
+
+    # OMNIDIRECTIONAL PADDING (Protects the extremities)
+    # Adds reflection on ALL sides. This way the extremities of the original image
+    # will always fall in the CENTER of the U-Net's field of view.
+    pad_t = overlap
+    pad_l = overlap
+
+    height_padded = height + pad_t
+    width_padded = width + pad_l
+
+    stride = patch_size - overlap
+    pad_b = (stride - ((height_padded - patch_size) % stride)) % stride if height_padded >= patch_size else patch_size - height_padded
+    pad_r = (stride - ((width_padded - patch_size) % stride)) % stride if width_padded >= patch_size else patch_size - width_padded
+
+    image = np.pad(image, ((0, 0), (pad_t, pad_b), (pad_l, pad_r)), mode='reflect')
+
+    proc_h, proc_w = image.shape[1], image.shape[2]
+
+    output_image = np.zeros((proc_h, proc_w), dtype=np.float32)
+    weight_map = np.zeros((proc_h, proc_w), dtype=np.float32)
+    blend_weights = get_blend_window(patch_size, alpha=0.5)
+
+    y_starts = list(range(0, proc_h - patch_size + 1, stride))
+    x_starts = list(range(0, proc_w - patch_size + 1, stride))
+    coords = [(y, x) for y in y_starts for x in x_starts]
+    total_patches = len(coords)
+
+    print(f"[*] Total patches: {total_patches} (Stride: {stride}px | Overlap: {overlap}px)")
+
+    with torch.no_grad():
+        for i in tqdm(range(0, total_patches, batch_size), desc="Batch Inference"):
+            batch_coords = coords[i:i + batch_size]
+
+            batch_patches = [
+                image[:, y:y + patch_size, x:x + patch_size]
+                for y, x in batch_coords
+            ]
+
+            batch_tensor = torch.from_numpy(np.stack(batch_patches, axis=0)).to(device)
+
+            with torch.autocast(device_type=device.type, enabled=device.type == 'cuda'):
+                preds = model(batch_tensor)
+
+            preds = preds.squeeze(1).float().cpu().numpy()
+
+            for (y, x), pred_patch in zip(batch_coords, preds):
+                output_image[y:y + patch_size, x:x + patch_size] += pred_patch * blend_weights
+                weight_map[y:y + patch_size, x:x + patch_size] += blend_weights
+
+    weight_map[weight_map == 0] = 1.0
+    final_output = output_image / weight_map
+
+    # CROP THE EXTRAPOLATED PADDING (Returns to exact original size)
+    final_output = final_output[pad_t:pad_t + height, pad_l:pad_l + width]
+    return np.clip(final_output, 0.0, 1.0)
+
+
+class SWIRGenerator:
+    """Reusable SWIR generator: loads the weights once and predicts many rasters.
+
+    Parameters
+    ----------
+    band : str
+        Target band: ``'B11'`` (SWIR1) or ``'B12'`` (SWIR2).
+    weights_path : str | PathLike, optional
+        Custom checkpoint. By default the packaged/cached weights are used and
+        downloaded on first use.
+    device : str | torch.device, optional
+        ``'cuda'``, ``'cpu'``, ``'cuda:1'``... Defaults to CUDA when available.
+    patch_size, overlap : int
+        Tile size and overlap (in pixels) of the sliding window.
+    batch_size : int
+        Number of tiles per forward pass.
+    """
+
+    def __init__(self, band, weights_path=None, device=None,
+                 patch_size=128, overlap=64, batch_size=32):
+        self.band = normalize_band(band)
+        self.device = get_device(device)
+        self.patch_size = patch_size
+        self.overlap = overlap
+        self.batch_size = batch_size
+
+        if self.device.type == 'cuda':
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cudnn.deterministic = False
+
+        self.model = load_inference_model(self.band, weights_path, self.device)
+
+    def predict(self, input_raster, output_raster=None):
+        """Generate the SWIR band for ``input_raster``.
+
+        Parameters
+        ----------
+        input_raster : str | PathLike | Sequence | Mapping
+            A 4-band stack (blue, green, red, nir), a list of 4 single-band
+            files in that order, or a dict with keys ``'blue'``, ``'green'``,
+            ``'red'`` and ``'nir'``.
+        output_raster : str | PathLike, optional
+            Where to save the result as a GeoTIFF. If omitted, nothing is written.
+
+        Returns
+        -------
+        np.ndarray
+            The predicted band, ``(H, W)`` float32, in the same scale as the
+            input (``[0, 1]`` or ``[0, 10000]``), with nodata restored.
+        """
+        print(f"[*] Processing input raster: {input_raster}")
+        image, profile, invalid_mask, nodata = read_wfi(input_raster)
         valid_mask = ~invalid_mask
-        
-        # 2. CRITICAL SANITIZATION (Avoids "Infection" of Patches at the edges)
-        # Replaces backgrounds and NaNs with 0.0 BEFORE the neural network processes. 
+
+        # CRITICAL SANITIZATION (Avoids "Infection" of Patches at the edges)
+        # Replaces backgrounds and NaNs with 0.0 BEFORE the neural network processes.
         # This ensures the U-Net does not return mathematical garbage in the boundary blocks.
         image[:, invalid_mask] = 0.0
         image = np.nan_to_num(image, nan=0.0)
-        
-        channels, height, width = image.shape
-        if channels != 4:
-            raise ValueError(f"The model expects 4 WFI bands, but it has {channels}.")
-            
-        max_val = float(np.max(image))
-        scaled_input = False
-        if max_val > 1.0:
-            print(f"[*] Values exceed 1.0. Adjusting factor 10000.0 to [0, 1].")
-            image = image / 10000.0
-            scaled_input = True
-            
-        image = np.clip(image, 0.0, 1.0)
-        
-        # 3. OMNIDIRECTIONAL PADDING (Protects the extremities)
-        # Adds reflection on ALL sides. This way the extremities of the original image
-        # will always fall in the CENTER of the U-Net's field of view.
-        pad_t = overlap
-        pad_l = overlap
-        
-        height_padded = height + pad_t
-        width_padded = width + pad_l
-        
-        stride = patch_size - overlap
-        pad_b = (stride - ((height_padded - patch_size) % stride)) % stride if height_padded >= patch_size else patch_size - height_padded
-        pad_r = (stride - ((width_padded - patch_size) % stride)) % stride if width_padded >= patch_size else patch_size - width_padded
-        
-        image = np.pad(image, ((0, 0), (pad_t, pad_b), (pad_l, pad_r)), mode='reflect')
-        
-        proc_h, proc_w = image.shape[1], image.shape[2]
-            
-        output_image = np.zeros((proc_h, proc_w), dtype=np.float32)
-        weight_map = np.zeros((proc_h, proc_w), dtype=np.float32)
-        blend_weights = get_blend_window(patch_size, alpha=0.5)
-        
-        y_starts = list(range(0, proc_h - patch_size + 1, stride))
-        x_starts = list(range(0, proc_w - patch_size + 1, stride))
-        coords = [(y, x) for y in y_starts for x in x_starts]
-        total_patches = len(coords)
-        
-        print(f"[*] Total patches: {total_patches} (Stride: {stride}px | Overlap: {overlap}px)")
-        
-        with torch.no_grad():
-            for i in tqdm(range(0, total_patches, batch_size), desc="Batch Inference"):
-                batch_coords = coords[i:i + batch_size]
-                
-                batch_patches = [
-                    image[:, y:y + patch_size, x:x + patch_size] 
-                    for y, x in batch_coords
-                ]
-                
-                batch_tensor = torch.from_numpy(np.stack(batch_patches, axis=0)).to(device)
-                
-                with torch.autocast(device_type=device.type):
-                    preds = model(batch_tensor)
-                
-                preds = preds.squeeze(1).float().cpu().numpy()
-                
-                for (y, x), pred_patch in zip(batch_coords, preds):
-                    output_image[y:y + patch_size, x:x + patch_size] += pred_patch * blend_weights
-                    weight_map[y:y + patch_size, x:x + patch_size] += blend_weights
 
-        weight_map[weight_map == 0] = 1.0
-        final_output = output_image / weight_map
-        
-        # 4. CROP THE EXTRAPOLATED PADDING (Returns to exact original size)
-        final_output = final_output[pad_t : pad_t + height, pad_l : pad_l + width]
-        final_output = np.clip(final_output, 0.0, 1.0)
-        
+        scaled_input = float(np.max(image)) > 1.0
         if scaled_input:
-            final_output = final_output * 10000.0
-            
-        # 5. FINAL TREATMENT: 3 Decimal Places and Perfect NoData Restoration
-        final_output = np.round(final_output, 3)
-        final_output[~valid_mask] = nodata_val  # Reapplies the nodata mask without blocks
-            
-        meta.update({
-            'count': 1,
-            'dtype': 'float32',
-            'compress': 'lzw',
-            'nodata': nodata_val
-        })
-        
-        os.makedirs(os.path.dirname(output_raster_path), exist_ok=True)
-        with rasterio.open(output_raster_path, 'w', **meta) as dst:
-            dst.write(final_output.astype(np.float32), 1)
-            
-    print(f"[+] Final raster successfully saved at: {output_raster_path}")
+            print(f"[*] Values exceed 1.0. Adjusting factor {REFLECTANCE_SCALE} to [0, 1].")
+            image = image / REFLECTANCE_SCALE
+        image = np.clip(image, 0.0, 1.0)
+
+        output = predict_array(self.model, image, self.device, self.patch_size,
+                               self.overlap, self.batch_size)
+
+        if scaled_input:
+            output = output * REFLECTANCE_SCALE
+
+        # FINAL TREATMENT: 3 Decimal Places and Perfect NoData Restoration
+        output = np.round(output, 3).astype(np.float32)
+        output[~valid_mask] = nodata
+
+        if output_raster is not None:
+            write_band(output_raster, output, profile, nodata)
+            print(f"[+] Final raster successfully saved at: {output_raster}")
+        return output
 
 
-def generate_swir1(input_raster, output_raster, BATCH_SIZE=32):
-    DEVICE, CHECKPOINT_B11, _ = globals()
-    generator_model = load_inference_model(
-        target_band=5,
-        checkpoint_path=CHECKPOINT_B11
-    )
+def generate_swir(band, input_raster, output_raster=None, batch_size=32, **kwargs):
+    """One-shot helper: load the ``band`` model and predict a single input.
 
-    predict_raster(
-        model=generator_model,
-        input_raster_path=INPUT_RASTER,
-        output_raster_path=OUTPUT_RASTER,
-        device=DEVICE,
-        patch_size=128,
-        overlap=64,
-        batch_size=BATCH_SIZE
-    )
-
-def generate_swir2(input_raster, output_raster, BATCH_SIZE=32):
-    DEVICE, _, CHECKPOINT_B12 = globals()
-    generator_model = load_inference_model(
-        target_band=6,
-        checkpoint_path=CHECKPOINT_B12
-    )
-
-    predict_raster(
-        model=generator_model,
-        input_raster_path=INPUT_RASTER,
-        output_raster_path=OUTPUT_RASTER,
-        device=DEVICE,
-        patch_size=128,
-        overlap=64,
-        batch_size=BATCH_SIZE
-    )
-
-def globals():
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cudnn.deterministic = False
-    
-    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    CHECKPOINT_B11 = '/tower/marujo/Downloads/Alisson/best_model_B11.pth'
-    CHECKPOINT_B12 = '/tower/marujo/Downloads/Alisson/best_model_B12.pth'
-
-    return DEVICE, CHECKPOINT_B11, CHECKPOINT_B12
+    Extra keyword arguments (``weights_path``, ``device``, ``patch_size``,
+    ``overlap``) are forwarded to :class:`SWIRGenerator`.
+    """
+    generator = SWIRGenerator(band, batch_size=batch_size, **kwargs)
+    return generator.predict(input_raster, output_raster)
 
 
-if __name__ == "__main__":
-    globals()
+def generate_swir1(input_raster, output_raster=None, batch_size=32, **kwargs):
+    """Generate SWIR1 (Sentinel-2 B11, ~1610 nm). See :func:`generate_swir`."""
+    return generate_swir('B11', input_raster, output_raster, batch_size, **kwargs)
 
-    INPUT_RASTER = '/tower/marujo/Downloads/Alisson/input/stacked.tif'
-    OUTPUT_RASTER = '/tower/marujo/Downloads/Alisson/test_B12_local.tif'
-    
-    BATCH_SIZE = 32
-    
-    generate_swir1(input_raster=INPUT_RASTER, output_raster=OUTPUT_RASTER, BATCH_SIZE=BATCH_SIZE) #Informing Batch_size
-    generate_swir2(input_raster=INPUT_RASTER, output_raster=OUTPUT_RASTER) #Not Informing Batch_size. 32 is default value
+
+def generate_swir2(input_raster, output_raster=None, batch_size=32, **kwargs):
+    """Generate SWIR2 (Sentinel-2 B12, ~2190 nm). See :func:`generate_swir`."""
+    return generate_swir('B12', input_raster, output_raster, batch_size, **kwargs)
