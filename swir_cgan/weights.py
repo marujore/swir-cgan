@@ -8,7 +8,8 @@ Weights are looked up in the following order:
    cloned repository or an editable install).
 4. The user cache directory (``~/.cache/swir_cgan`` by default, or
    ``$XDG_CACHE_HOME/swir_cgan``). If the file is missing it is
-   downloaded from the GitHub release defined by ``WEIGHTS_BASE_URL``.
+   downloaded from the GitHub release defined by ``WEIGHTS_BASE_URL`` and its
+   SHA256 is checked against ``WEIGHT_SHA256``.
 
 Files that are Git LFS pointers (a clone made without ``git-lfs`` installed)
 are ignored.
@@ -29,6 +30,13 @@ except ImportError:  # NumPy 1.x
 WEIGHT_FILES = {
     'B11': 'best_model_B11.pth',
     'B12': 'best_model_B12.pth',
+}
+
+# SHA256 of the ``weights-v1`` release assets. Downloads that do not match are
+# rejected. Update together with ``WEIGHTS_BASE_URL`` when publishing new weights.
+WEIGHT_SHA256 = {
+    'best_model_B11.pth': 'ca82911a8e4668466099eae51ce2e525fe82bbbd2b04cf46b7325cf1088e676c',
+    'best_model_B12.pth': '9655ccdf590a281af3fb8705246ac9ba6f1f27af119c3b780085b7315155ed5b',
 }
 
 # The ``.pth`` files (~200 MB each) are not shipped in the wheel (PyPI limits files
@@ -102,7 +110,9 @@ def get_weights_path(band, download=True):
     cached.parent.mkdir(parents=True, exist_ok=True)
     tmp = cached.with_suffix('.part')
     try:
-        torch.hub.download_url_to_file(url, str(tmp), progress=True)
+        # Raises RuntimeError if the SHA256 of the downloaded file does not match.
+        torch.hub.download_url_to_file(url, str(tmp), hash_prefix=WEIGHT_SHA256[filename],
+                                       progress=True)
         tmp.replace(cached)
     finally:
         if tmp.exists():

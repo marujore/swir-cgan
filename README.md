@@ -13,6 +13,12 @@ It uses a conditional GAN with an attention U-Net generator.
 ## Installation
 
 ```bash
+pip install swir-cgan
+```
+
+or the development version from GitHub:
+
+```bash
 pip install git+https://github.com/marujore/swir-cgan.git
 ```
 
@@ -123,7 +129,7 @@ for scene in ['scene_a.tif', 'scene_b.tif']:
 `predict` also returns the result as a NumPy array. If `output_raster` is omitted,
 nothing is written to disk.
 
-More examples are in [`examples/example.py`](examples/example.py).
+More examples are in [`examples/example.py`](https://github.com/marujore/swir-cgan/blob/main/examples/example.py).
 
 ### Command line
 
@@ -197,14 +203,39 @@ scripts/             # maintenance scripts (weights export)
 tests/               # pytest suite
 ```
 
+## Limitations
+
+The quality of the estimates depends on how representative the training data is and on the
+spectral characteristics of the land targets. The model was trained on co-registered WFI and
+Sentinel-2 MSI image pairs acquired on coincident dates and regions, mainly over the
+**Cerrado biome**. Performance on other biomes, targets or acquisition conditions has not been
+fully evaluated. The generated bands **do not replace** SWIR measurements from sensors that
+operate in that spectral range.
+
 ## Citation
 
-If you use this package in your research, please cite:
+The method is described in:
 
+> A. de Oliveira, R. Marujo and T. Körting, "SWIR-cGAN: Synthesizing SWIR Bands Using VNIR
+> Imagery from CBERS and AMAZONIA-1," *IEEE Geoscience and Remote Sensing Letters*, 2026
+> (early access). <https://ieeexplore.ieee.org/document/11793642>
+
+If you use this package in your research, please cite the paper:
+
+```bibtex
+@article{oliveira2026swircgan,
+  author  = {de Oliveira, Alisson and Marujo, Rennan and K{\"o}rting, Thales},
+  title   = {{SWIR-cGAN}: Synthesizing {SWIR} Bands Using {VNIR} Imagery from {CBERS} and {AMAZONIA-1}},
+  journal = {IEEE Geoscience and Remote Sensing Letters},
+  year    = {2026},
+  note    = {Early access},
+  url     = {https://ieeexplore.ieee.org/document/11793642}
+}
 ```
-TODO: add the paper reference / BibTeX here.
-```
+
+The dataset used in the study is available at
+<https://doi.org/10.57760/sciencedb.34763>.
 
 ## License
 
-Distributed under the GNU General Public License v3.0. See [LICENSE](LICENSE).
+Distributed under the GNU General Public License v3.0. See [LICENSE](https://github.com/marujore/swir-cgan/blob/main/LICENSE).

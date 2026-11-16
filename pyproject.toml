@@ -41,7 +41,7 @@ packages = ["swir_cgan"]
 [tool.setuptools.dynamic]
 version = {attr = "swir_cgan.__version__"}
 
-# The .pth checkpoints (Git LFS) are NOT shipped in the wheel (PyPI limits files
-# to 100 MB); they are downloaded on first use. See swir_cgan/weights.py.
+# The .pth checkpoints are NOT shipped in the wheel (PyPI limits files to 100 MB);
+# they are downloaded on first use. See swir_cgan/weights.py.
 [tool.setuptools.exclude-package-data]
 swir_cgan = ["weights/*.pth"]
