@@ -1,4 +1,4 @@
-"""Export generator-only checkpoints, ready to be committed to the repository (Git LFS).
+"""Export generator-only checkpoints, ready to be uploaded as release assets.
 
 Training checkpoints also store the discriminator and NumPy metric values.
 This script keeps only what inference needs (generator weights, training

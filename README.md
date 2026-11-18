@@ -56,23 +56,42 @@ Check the result with
 
 ## Pretrained weights
 
-There is one generator per band: `best_model_B11.pth` and `best_model_B12.pth`, about 200 MB each.
-They are published as assets of the
-[`weights-v1` release](https://github.com/marujore/swir-cgan/releases/tag/weights-v1).
-They are too large to ship inside the Python package, so the package **downloads them
+There is one generator per band (B11 and B12). Two versions of the weights are published as
+GitHub releases, and you can choose which one to use:
+
+| Version | Release | Files | Size per band |
+|---|---|---|---|
+| `v2` (default) | [`weights-v2`](https://github.com/marujore/swir-cgan/releases/tag/weights-v2) | `B11_pretrained_weights_v2.pth`, `B12_pretrained_weights_v2.pth` | ~600 MB |
+| `v1` | [`weights-v1`](https://github.com/marujore/swir-cgan/releases/tag/weights-v1) | `best_model_B11.pth`, `best_model_B12.pth` | ~200 MB |
+
+`v1` is the version used by `swir-cgan` 0.1.0. Select the version with `weights_version=`
+(Python) or `--weights-version` (CLI):
+
+```python
+generate_swir1('wfi_stack.tif', 'wfi_B11.tif', weights_version='v1')
+```
+
+```bash
+swir-cgan --stack wfi_stack.tif --b11 out_B11.tif --weights-version v1
+```
+
+The weights are too large to ship inside the Python package, so the package **downloads them
 automatically the first time they are needed** and caches them in `~/.cache/swir_cgan/`.
-Only the band you use is downloaded.
+Only the band and version you use are downloaded, and the SHA256 of each downloaded file
+is checked before use.
 
 The package looks for the weights in this order:
 
-1. The `weights_path=` argument (Python) or `--weights-dir` (CLI).
+1. The `weights_path=` argument (Python) or `--weights-dir` (CLI). A path given here is used
+   as is, whatever the selected version.
 2. The directory in the `SWIR_CGAN_WEIGHTS_DIR` environment variable.
 3. `swir_cgan/weights/` inside the package, if you place the files there (for example
    in a clone installed with `pip install -e .`). The `.pth` files there are ignored by Git.
 4. The cache directory (`$XDG_CACHE_HOME/swir_cgan` or `~/.cache/swir_cgan`).
-   If the file is missing there, it is downloaded from the `weights-v1` release.
+   If the file is missing there, it is downloaded from the release of the selected version.
 
-For offline machines, copy the two `.pth` files to a folder and set
+In steps 2 to 4 the file names of the selected version are looked up. For offline
+machines, copy the `.pth` files of the version you use to a folder and set
 `export SWIR_CGAN_WEIGHTS_DIR=/path/to/folder`.
 
 ## Quick start
@@ -151,7 +170,8 @@ Run `swir-cgan --help` for all options.
 | `output_raster` | `None` | Output GeoTIFF path. If `None`, only the array is returned. |
 | `batch_size` | `32` | Number of 128×128 tiles per forward pass. Reduce it if the GPU runs out of memory. |
 | `device` | auto | `'cuda'`, `'cuda:1'`, `'cpu'`… Defaults to CUDA when available. |
-| `weights_path` | auto | Custom checkpoint file. |
+| `weights_version` | `'v2'` | Published weights to use: `'v1'` or `'v2'`. |
+| `weights_path` | auto | Custom checkpoint file. Overrides `weights_version`. |
 | `patch_size` / `overlap` | `128` / `64` | Size and overlap of the sliding-window tiles, in pixels. |
 
 ## Input and output conventions
@@ -180,7 +200,8 @@ Run `swir-cgan --help` for all options.
 
 ### Metrics
 
-Metrics stored in each checkpoint for the best training epoch (reflectance in `[0, 1]`):
+Metrics of the **`weights-v1`** checkpoints for the best training epoch (reflectance in
+`[0, 1]`). Metrics for `weights-v2`, used by the current version, will be added later.
 
 | Band | SSIM | PSNR (dB) | R² | MAE | RMSE |
 |---|---|---|---|---|---|
