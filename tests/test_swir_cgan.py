@@ -83,3 +83,31 @@ def test_write_band_in_current_dir(tmp_path, monkeypatch, image):
     write_band('out.tif', image[0], meta, nodata)
     with rasterio.open('out.tif') as src:
         assert src.count == 1 and src.nodata == nodata
+
+
+def test_weights_version_selection(tmp_path, monkeypatch):
+    from swir_cgan import weights
+
+    assert weights.normalize_version(None) == weights.DEFAULT_WEIGHTS_VERSION
+    assert weights.normalize_version('V1') == weights.normalize_version('weights-v1') == 'v1'
+    assert weights.normalize_version(2) == 'v2'
+    with pytest.raises(ValueError, match='Unknown weights version'):
+        weights.normalize_version('v99')
+
+    assert weights.weights_filename('B11', 'v1') == 'best_model_B11.pth'
+    assert weights.weights_filename('swir2', 'v2') == 'B12_pretrained_weights_v2.pth'
+
+    # Each version resolves to its own file in SWIR_CGAN_WEIGHTS_DIR.
+    for version in weights.WEIGHT_VERSIONS:
+        (tmp_path / weights.weights_filename('B11', version)).write_bytes(b'x')
+    monkeypatch.setenv(weights.ENV_WEIGHTS_DIR, str(tmp_path))
+    for version in weights.WEIGHT_VERSIONS:
+        path = weights.get_weights_path('B11', version, download=False)
+        assert path == tmp_path / weights.weights_filename('B11', version)
+
+
+def test_cli_weights_version_choices():
+    from swir_cgan.cli import main
+
+    with pytest.raises(SystemExit):
+        main(['--stack', 'x.tif', '--b11', 'o.tif', '--weights-version', 'v99'])

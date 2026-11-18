@@ -74,11 +74,16 @@ def get_device(device=None):
     return torch.device('cuda')
 
 
-def load_inference_model(band, weights_path=None, device=None, pad_input=16):
-    """Build the generator for ``band`` ('B11' or 'B12') and load its weights."""
+def load_inference_model(band, weights_path=None, device=None, pad_input=16,
+                         weights_version=None):
+    """Build the generator for ``band`` ('B11' or 'B12') and load its weights.
+
+    ``weights_version`` (``'v1'``, ``'v2'``...) selects the published weights and is
+    ignored when ``weights_path`` is given.
+    """
     band = normalize_band(band)
     device = get_device(device)
-    checkpoint_path = weights_path or get_weights_path(band)
+    checkpoint_path = weights_path or get_weights_path(band, weights_version)
     print(f"[*] Loading model weights from: {checkpoint_path}")
 
     model = UNetGenerator(dropout_rate=DROPOUT[band], pad_input=pad_input).to(device)
@@ -161,6 +166,9 @@ class SWIRGenerator:
     weights_path : str | PathLike, optional
         Custom checkpoint. By default the packaged/cached weights are used and
         downloaded on first use.
+    weights_version : str, optional
+        Published weights to use: ``'v1'`` or ``'v2'``. Defaults to the latest
+        (``'v2'``). Ignored when ``weights_path`` is given.
     device : str | torch.device, optional
         ``'cuda'``, ``'cpu'``, ``'cuda:1'``... Defaults to CUDA when available.
     patch_size, overlap : int
@@ -170,7 +178,7 @@ class SWIRGenerator:
     """
 
     def __init__(self, band, weights_path=None, device=None,
-                 patch_size=128, overlap=64, batch_size=32):
+                 patch_size=128, overlap=64, batch_size=32, weights_version=None):
         self.band = normalize_band(band)
         self.device = get_device(device)
         self.patch_size = patch_size
@@ -181,7 +189,8 @@ class SWIRGenerator:
             torch.backends.cudnn.benchmark = True
             torch.backends.cudnn.deterministic = False
 
-        self.model = load_inference_model(self.band, weights_path, self.device)
+        self.model = load_inference_model(self.band, weights_path, self.device,
+                                          weights_version=weights_version)
 
     def predict(self, input_raster, output_raster=None):
         """Generate the SWIR band for ``input_raster``.
@@ -236,8 +245,8 @@ class SWIRGenerator:
 def generate_swir(band, input_raster, output_raster=None, batch_size=32, **kwargs):
     """One-shot helper: load the ``band`` model and predict a single input.
 
-    Extra keyword arguments (``weights_path``, ``device``, ``patch_size``,
-    ``overlap``) are forwarded to :class:`SWIRGenerator`.
+    Extra keyword arguments (``weights_version``, ``weights_path``, ``device``,
+    ``patch_size``, ``overlap``) are forwarded to :class:`SWIRGenerator`.
     """
     generator = SWIRGenerator(band, batch_size=batch_size, **kwargs)
     return generator.predict(input_raster, output_raster)

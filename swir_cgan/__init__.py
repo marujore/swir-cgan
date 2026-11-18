@@ -8,13 +8,15 @@ from .inference import (
     load_inference_model,
 )
 from .io import BAND_ORDER, read_wfi
-from .weights import get_weights_path
+from .weights import DEFAULT_WEIGHTS_VERSION, WEIGHT_VERSIONS, get_weights_path
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 __all__ = [
     'BAND_ORDER',
+    'DEFAULT_WEIGHTS_VERSION',
     'SWIRGenerator',
+    'WEIGHT_VERSIONS',
     'generate_swir',
     'generate_swir1',
     'generate_swir2',
